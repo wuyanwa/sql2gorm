@@ -2,18 +2,19 @@ package parser
 
 import (
 	"fmt"
-	"github.com/jinzhu/inflection"
-	"github.com/blastrain/vitess-sqlparser/tidbparser/ast"
-	"github.com/blastrain/vitess-sqlparser/tidbparser/dependency/mysql"
-	"github.com/blastrain/vitess-sqlparser/tidbparser/dependency/types"
-	"github.com/blastrain/vitess-sqlparser/tidbparser/parser"
-	"github.com/pkg/errors"
 	"go/format"
 	"io"
 	"sort"
 	"strings"
 	"sync"
 	"text/template"
+
+	"github.com/blastrain/vitess-sqlparser/tidbparser/ast"
+	"github.com/blastrain/vitess-sqlparser/tidbparser/dependency/mysql"
+	"github.com/blastrain/vitess-sqlparser/tidbparser/dependency/types"
+	"github.com/blastrain/vitess-sqlparser/tidbparser/parser"
+	"github.com/jinzhu/inflection"
+	"github.com/pkg/errors"
 )
 
 var (
@@ -120,7 +121,7 @@ func makeCode(stmt *ast.CreateTableStmt, opt options) (string, []string, error) 
 		data.NameFunc = true
 	}
 
-	data.TableName = toCamel(data.TableName)
+	data.TableName = toCamel(data.TableName, false)
 
 	// find table comment
 	for _, opt := range stmt.Options {
@@ -146,7 +147,7 @@ func makeCode(stmt *ast.CreateTableStmt, opt options) (string, []string, error) 
 		}
 
 		field := tmplField{
-			Name: toCamel(goFieldName),
+			Name: toCamel(goFieldName, false),
 		}
 
 		tags := make([]string, 0, 4)
@@ -197,8 +198,10 @@ func makeCode(stmt *ast.CreateTableStmt, opt options) (string, []string, error) 
 		}
 		tags = append(tags, "gorm", gormTag.String())
 
+		//添加json tag，首字母小写的驼峰
 		if opt.JsonTag {
-			tags = append(tags, "json", colName)
+			//tags = append(tags, "json", colName)
+			tags = append(tags, "json", toCamel(colName, true))
 		}
 
 		field.Tag = makeTagStr(tags)
@@ -314,7 +317,8 @@ func getDefaultValue(expr ast.ExprNode) (value string) {
 	return
 }
 
-func toCamel(s string) string {
+// 转为驼峰
+func toCamel(s string, firstLow bool) string {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return s
@@ -329,13 +333,14 @@ func toCamel(s string) string {
 	for _, v := range []byte(s) {
 		vIsCap := v >= 'A' && v <= 'Z'
 		vIsLow := v >= 'a' && v <= 'z'
-		if wordFirst && vIsLow {
+		if wordFirst && vIsLow && !firstLow {
 			v -= 'a' - 'A'
 		}
 
 		if vIsCap || vIsLow {
 			temp.WriteByte(v)
 			wordFirst = false
+			firstLow = false
 		} else {
 			isNum := v >= '0' && v <= '9'
 			wordFirst = isNum || v == '_' || v == ' ' || v == '-' || v == '.'
